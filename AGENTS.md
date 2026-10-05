@@ -16,7 +16,9 @@ main.go        MCP server wiring: tool definitions + stdio transport
 saq/client.go  HTTP client for the two SAQ endpoints (GraphQL search,
                store-locator inventory), incl. product-page scraping for
                the Magento entity ID
-saq/types.go   Product, Store, Inventory types
+saq/cart.go    Authenticated cart tools (generateCustomerToken, customer
+               cart CRUD); credentials via SAQ_EMAIL/SAQ_PASSWORD env only
+saq/types.go   Product, Store, Inventory, Cart types
 ```
 
 ## Conventions
@@ -28,6 +30,10 @@ saq/types.go   Product, Store, Inventory types
 - Tools return concise JSON. The agent reading it is the UI — no pretty
   printing needed.
 - French product/store names are data, not UI: pass them through verbatim.
+- Cart tools need the user's SAQ.com account because only a *customer* cart
+  persists into the browser session for checkout (guest carts can't be handed
+  off). Credentials come from env vars only — never log them, never persist
+  them, only send them to `generateCustomerToken`.
 
 ## Endpoints (undocumented, reverse-engineered — verify if broken)
 
@@ -38,3 +44,8 @@ saq/types.go   Product, Store, Inventory types
    Header `X-Requested-With: XMLHttpRequest` required. The `{id}` is the
    Magento entity ID from the product page's `data-product-id` attribute
    (page URL is `https://www.saq.com/fr/{sku}`).
+3. `POST https://www.saq.com/graphql` — cart mutations (require a customer
+   token from `generateCustomerToken(email, password) { token }` sent as
+   `Authorization: Bearer`):
+   `customerCart { id items { ... } }`, `addProductsToCart`, `removeItemFromCart`.
+   SKU = the SAQ product code (e.g. `11091921`).

@@ -20,7 +20,13 @@ func mustJSON(v any) string {
 
 func main() {
 	client := saq.NewClient()
-	s := server.NewMCPServer("saq-mcp", "0.1.0", server.WithToolCapabilities(true))
+	// Cart tools ("shop for me, I'll pay") need the SAQ.com account so the
+	// cart persists into the browser session for checkout. Reads work
+	// without credentials.
+	if email, password := os.Getenv("SAQ_EMAIL"), os.Getenv("SAQ_PASSWORD"); email != "" && password != "" {
+		client.WithCredentials(email, password)
+	}
+	s := server.NewMCPServer("saq-mcp", "0.2.0", server.WithToolCapabilities(true))
 
 	searchTool := mcp.NewTool("search_products",
 		mcp.WithDescription("Search the SAQ (Société des alcools du Québec) product catalog by keyword. Returns matching products with name, SKU, price in CAD, and stock status."),
@@ -78,6 +84,61 @@ func main() {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return mcp.NewToolResultText(mustJSON(stores)), nil
+	})
+
+	getCartTool := mcp.NewTool("get_cart",
+		mcp.WithDescription("Show your SAQ.com cart: items, quantities, and total. The cart lives in your SAQ account — open saq.com in your browser (logged in) to check out and pay. Requires SAQ_EMAIL and SAQ_PASSWORD env vars."),
+	)
+	s.AddTool(getCartTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		cart, err := client.GetCart(ctx)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(mustJSON(cart)), nil
+	})
+
+	addToCartTool := mcp.NewTool("add_to_cart",
+		mcp.WithDescription("Add bottles of a product to your SAQ.com cart. Returns the updated cart. You complete checkout and payment yourself at saq.com. Requires SAQ_EMAIL and SAQ_PASSWORD env vars."),
+		mcp.WithString("sku", mcp.Required(), mcp.Description("The SAQ product code (SKU), e.g. '11091921'")),
+		mcp.WithNumber("quantity", mcp.Description("Bottles to add (default 1, max 99)")),
+	)
+	s.AddTool(addToCartTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		sku, err := req.RequireString("sku")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		cart, err := client.AddToCart(ctx, sku, req.GetInt("quantity", 1))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(mustJSON(cart)), nil
+	})
+
+	removeFromCartTool := mcp.NewTool("remove_from_cart",
+		mcp.WithDescription("Remove one line from your SAQ.com cart by its item UID (see get_cart). Returns the updated cart. Requires SAQ_EMAIL and SAQ_PASSWORD env vars."),
+		mcp.WithString("uid", mcp.Required(), mcp.Description("The cart item UID from get_cart")),
+	)
+	s.AddTool(removeFromCartTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uid, err := req.RequireString("uid")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		cart, err := client.RemoveFromCart(ctx, uid)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(mustJSON(cart)), nil
+	})
+
+	clearCartTool := mcp.NewTool("clear_cart",
+		mcp.WithDescription("Remove everything from your SAQ.com cart. Requires SAQ_EMAIL and SAQ_PASSWORD env vars."),
+	)
+	s.AddTool(clearCartTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		cart, err := client.ClearCart(ctx)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(mustJSON(cart)), nil
 	})
 
 	if err := server.ServeStdio(s); err != nil {

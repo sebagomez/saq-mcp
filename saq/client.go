@@ -19,7 +19,7 @@ const (
 	productURL   = "https://www.saq.com/fr/%s" // %s = SKU
 	inventoryURL = "https://www.saq.com/fr/store/locator/ajaxlist/context/product/id/%s?loaded=%d"
 
-	userAgent      = "saq-mcp/0.1.0 (+https://github.com/sebagomez/saq-mcp)"
+	userAgent      = "saq-mcp/0.2.0 (+https://github.com/sebagomez/saq-mcp)"
 	requestTimeout = 20 * time.Second
 	pageSize       = 10 // stores per inventory page
 )
@@ -29,6 +29,11 @@ var productIDRe = regexp.MustCompile(`data-product-id="(\d+)"`)
 // Client talks to SAQ's (undocumented) storefront endpoints.
 type Client struct {
 	http *http.Client
+	// SAQ.com account credentials for cart tools (see saq/cart.go).
+	// Never logged or persisted; only sent to generateCustomerToken.
+	email, password string
+	// Cached customer token, refreshed on auth failures.
+	token string
 }
 
 // NewClient returns a client with a polite timeout and user agent.
