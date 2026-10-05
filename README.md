@@ -75,6 +75,35 @@ server keeps request rates polite.
 go build -o saq-mcp .
 ```
 
+## Testing
+
+No model subscription needed — you can call the tools directly.
+
+**MCP Inspector** (official, free, no account):
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+Opens a UI at http://localhost:6274. Set transport to `stdio`, command to
+`/path/to/saq-mcp`, click Connect, then Tools → List Tools to invoke any tool
+with your own arguments. Cart tools need `SAQ_EMAIL`/`SAQ_PASSWORD` set in the
+Inspector's environment section.
+
+**Raw JSON-RPC** over stdin (zero dependencies):
+
+```bash
+printf '%s\n' \
+'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+'{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+'{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+| ./saq-mcp
+```
+
+For a real agent driving the tools without a paid subscription,
+[Goose](https://block.github.io/goose/) (open-source, MCP-native) with a free
+model tier works, as does Ollama + Open WebUI fully local.
+
 ## Use with Claude Desktop / any MCP client (stdio)
 
 ```json
